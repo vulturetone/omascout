@@ -124,4 +124,11 @@ object and is runnable by hand:
 ./scripts/nightscout.py --url https://mysite.example.com --sensor-days 15
 ```
 
-Every knob the widget has is a flag on that script.
+# Disclaimer
+
+Omascout is not a medical application and is not approved or certified by any healthcare regulator. It displays data you already have, for information only.
+
+Do not use it to diagnose, treat, or make dosing decisions. Check your healthcare provider recommended methods.
+
+Provided as is, without warranty of any kind, and used at your own risk. Not
+affiliated with or endorsed by any other company or organization.
