@@ -189,11 +189,11 @@ Panel {
   //      the same thing under every theme. Each is overridable from
   //      shell.json for a theme they genuinely clash with.
   readonly property color colorInRange: setting("colorInRange", '#95d58f')
-  readonly property color colorHigh:    setting("colorHigh",    "#f9e2af")
-  readonly property color colorLow:     setting("colorLow",     "#fab387")
+  readonly property color colorHigh:    setting("colorHigh",    '#ffba75')
+  readonly property color colorLow:     setting("colorLow",     '#ffba75')
   readonly property color colorUrgent:  setting("colorUrgent",  "#f38ba8")
   readonly property color colorStale:   setting("colorStale",   '#6480e6')
-  readonly property color colorError:   setting("colorError",   '#862782')
+  readonly property color colorError:   setting("colorError",   '#feb6fb')
 
   readonly property color glucoseColor: {
     switch (glucoseClass) {
@@ -273,11 +273,7 @@ Panel {
     return "Expires " + when + " · " + sensor.leftLabel + " left"
   }
 
-  // The bar injects settings a beat after constructing the widget, so the
-  // command is always built once from empty settings before the real one
-  // arrives. Polling on a short settle rather than on construction means one
-  // fetch with the configured site, instead of a wasted unconfigured fetch
-  // and a "⚠️ NS" flash on every shell restart.
+  // The bar injects settings a beat after constructing the widget
   onScriptCommandChanged: settleTimer.restart()
 
   function applyOutput(raw) {
@@ -357,7 +353,7 @@ Panel {
   // restart() would break that binding and leave it ticking after demo ends.
   Timer {
     id: demoTimer
-    interval: 1000
+    interval: 1500
     repeat: true
     onTriggered: root.demoStep(1)
   }

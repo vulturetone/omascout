@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "id": "vulturetone.omascout",
-  "name": "Omascout Glucose Widget",
+  "name": "Omascout CGM",
   "version": "0.1.0",
   "author": "vulturetone",
   "license": "MIT",
-  "description": "Display Current glucose from a Nightscout site, using server's thresholds, with an optional derived sensor-expiry warning",
+  "description": "Display current blood glucose from a Nightscout site, using the site's thresholds, with an optional derived sensor-expiry warning",
   "kinds": [
     "bar-widget"
   ],
@@ -13,7 +13,7 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Nightscout",
+    "displayName": "Omascout CGM",
     "description": "Glucose pill with trend and delta, plus a popup showing sensor age and expiry.",
     "category": "Info",
     "allowMultiple": false,
@@ -129,7 +129,7 @@
         "key": "colorError",
         "type": "string",
         "label": "Colour: error",
-        "defaultValue": "#862782"
+        "defaultValue": "#db93d8"
       }
     ]
   }

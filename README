@@ -1,8 +1,12 @@
-# Omascout 
+# Omascout CGM 
 
 Current blood glucose in the bar, coloured using your own Nightscout server's
 thresholds, with a popup showing the reading's age and, where it can be
 derived, how much sensor life is left.
+
+## Known issues
+- Colours are fixed and not themed 
+
 
 ## images
 
@@ -11,7 +15,6 @@ derived, how much sensor life is left.
 
 ### Demo mode
 ![demo](demo.png)
-
 
 
 ## Install
@@ -27,7 +30,8 @@ Then set at least the site URL on the widget's entry in
 { 
   "id": "vulturetone.omascout", 
   "url": "https://mysite.example.com:1337", 
-  "sensorDays": 15 
+  "sensorDays": 15,
+  ...
 }
 ```
 
@@ -49,10 +53,6 @@ second config file.
 | `staleMins` | `5` | Minutes without a reading before the pill greys out. |
 | `timeoutSec` | `4` | HTTP timeout. |
 
-Glucose colours are a traffic light, so they're fixed rather than theme
-roles: a reading has to mean the same thing under every theme. Override any
-of them if they clash with yours.
-
 
 ## Interactions
 
@@ -64,8 +64,7 @@ of them if they clash with yours.
 
 Also on IPC: `omarchy-shell vulturetone.omascout refresh|open|close|show|hide|toggle`.
 
-The popup's **Demo** button cycles the bar and panel through every state on a
-one-second loop: each glucose class, the sensor warnings, and the error
+The popup's **Demo** button cycles the bar and panel through every state on a loop: each glucose class, the sensor warnings, and the error
 states. Handy for checking a custom palette without waiting for real glucose
 to go there. Polling pauses while it runs, and closing the popup ends it, so
 a fake reading can't be left sitting on the bar.
@@ -80,18 +79,14 @@ whatever unit your site displays. If the site has never been reachable,
 Nightscout's own defaults are used. Units come from the server for the same
 reason, so there's no unit setting here.
 
-Colours aren't themed, but you can override them if they clash. I'll look into making it pick up themes from Omarchy in future. 
+Colours aren't themed, but you can override them in the  if they clash. I'll look into making it pick up themes from Omarchy in future. 
 
 ## Authentication
 
-A site running `AUTH_DEFAULT_ROLES=readable` needs no credential and works
-with no `tokenFile` at all. When the file exists its contents are sent as a
-read-only token, so locking a site down to `denied` later needs no change
-here.
+If reading your nightscout instance need a token, it should be placed in a file somewhere and that path should be set in shell.json using `"tokenFile":"~/path/to/tokenFile"`
 
-Keep that file outside any directory your dotfile manager syncs. The default
-sits in `~/.config/` rather than next to this plugin because
-`~/.config/omarchy/` is the sort of directory people push to a remote.
+Alternatively, a site running `AUTH_DEFAULT_ROLES=readable` needs no credential and works
+with no `tokenFile` at all (this is how I run, as the nightscout instance is only exposed to the local network)
 
 ## Sensor expiry
 
