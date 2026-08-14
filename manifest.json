@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "id": "vulturetone.omascout",
+  "name": "Omascout Glucose Widget",
+  "version": "0.1.0",
+  "author": "vulturetone",
+  "license": "MIT",
+  "description": "Display Current glucose from a Nightscout site, using server's thresholds, with an optional derived sensor-expiry warning",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Nightscout",
+    "description": "Glucose pill with trend and delta, plus a popup showing sensor age and expiry.",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "url": "",
+      "intervalSec": 60
+    },
+    "schema": [
+      {
+        "key": "url",
+        "type": "string",
+        "label": "Nightscout URL",
+        "defaultValue": "",
+        "description": "Base URL of your Nightscout site, e.g. https://mysite.example.com:1337. Required."
+      },
+      {
+        "key": "intervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 15,
+        "max": 3600,
+        "step": 15,
+        "defaultValue": 60,
+        "description": "Most uploaders post about once a minute; polling faster than that only adds load."
+      },
+      {
+        "key": "tokenFile",
+        "type": "path",
+        "label": "Access token file",
+        "defaultValue": "",
+        "description": "File holding a read-only Nightscout token. Optional: a site with AUTH_DEFAULT_ROLES=readable needs none. Keep it outside any directory your dotfile manager syncs. Defaults to ~/.config/nightscout-token."
+      },
+      {
+        "key": "sensorDays",
+        "type": "integer",
+        "label": "Sensor wear time (days)",
+        "min": 0,
+        "max": 180,
+        "step": 1,
+        "defaultValue": 0,
+        "description": "0 disables sensor tracking. Set to your sensor's wear time (Libre 2: 14, Libre 2 Plus: 15, Dexcom G6: 10) to derive expiry from the first reading carrying each serial. Only meaningful when your uploader forwards a serial in the entry's device field and posts no sensor-change treatments."
+      },
+      {
+        "key": "warmupMins",
+        "type": "integer",
+        "label": "Sensor warmup (minutes)",
+        "min": 0,
+        "max": 720,
+        "step": 15,
+        "defaultValue": 60,
+        "description": "Backdated off the first reading to estimate the activation time."
+      },
+      {
+        "key": "warnHours",
+        "type": "integer",
+        "label": "Warn when this close to expiry (hours)",
+        "min": 0,
+        "max": 168,
+        "step": 1,
+        "defaultValue": 24
+      },
+      {
+        "key": "staleMins",
+        "type": "integer",
+        "label": "Stale after (minutes)",
+        "min": 1,
+        "max": 120,
+        "step": 1,
+        "defaultValue": 5,
+        "description": "Minutes without a new reading before the pill greys out."
+      },
+      {
+        "key": "timeoutSec",
+        "type": "integer",
+        "label": "HTTP timeout (seconds)",
+        "min": 1,
+        "max": 60,
+        "step": 1,
+        "defaultValue": 4
+      },
+      {
+        "key": "colorInRange",
+        "type": "string",
+        "label": "Colour: in range",
+        "defaultValue": "#95d58f"
+      },
+      {
+        "key": "colorHigh",
+        "type": "string",
+        "label": "Colour: high",
+        "defaultValue": "#f9e2af"
+      },
+      {
+        "key": "colorLow",
+        "type": "string",
+        "label": "Colour: low",
+        "defaultValue": "#fab387"
+      },
+      {
+        "key": "colorUrgent",
+        "type": "string",
+        "label": "Colour: urgent high/low",
+        "defaultValue": "#f38ba8"
+      },
+      {
+        "key": "colorStale",
+        "type": "string",
+        "label": "Colour: stale feed",
+        "defaultValue": "#6480e6"
+      },
+      {
+        "key": "colorError",
+        "type": "string",
+        "label": "Colour: error",
+        "defaultValue": "#862782"
+      }
+    ]
+  }
+}
