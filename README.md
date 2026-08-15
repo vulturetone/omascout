@@ -1,4 +1,4 @@
-# Omascout CGM 
+# Omascout
 
 Current blood glucose in the bar, coloured using your own Nightscout server's
 thresholds, with a popup showing the reading's age and, where it can be
@@ -91,24 +91,21 @@ with no `tokenFile` at all (this is how I run, as the nightscout instance is onl
 
 ### Tokens require HTTPS
 
-A token is only sent over a transport that can keep it: `https://`, or a
-loopback address, where nothing reaches a network interface. Point a token at
-a plain `http://` site anywhere else and the widget refuses to poll, showing
-**⚠️ Insecure** rather than putting your token — and every reading behind it —
-on the wire in clear text for anyone sharing the network.
+A token is only sent over a transport that can keep it secure i.e. `https://` (or a
+loopback address). If you point a token at a plain `http://` site anywhere else and the widget refuses to poll, showing
+**⚠️ Insecure** rather than putting your token (and readings) on the wire in clear text for anyone sharing the network.
 
-Two ways out, depending on what you actually want:
+Two solutions depending on what you actually want:
 
-- **Put the site behind HTTPS.** The real fix, and the only one that protects
-  the glucose data as well as the token.
-- **`"allowInsecureAuth": true`** sends it anyway. Only sensible on a network
-  you genuinely trust, and it protects nothing — the readings were already
+- **Put the site behind HTTPS.** this is the safest option.
+- **`"allowInsecureAuth": true`** sends it anyway. Only really sensible on a network
+  you genuinely trust, and it protects nothing the readings were already
   travelling in the clear, and now the token is too.
 
-If your site needs no token, none of this applies: a `readable` site polls over
+If your site needs no token, none of this applies: an open `readable` site polls over
 plain `http` exactly as it always did. Note that the token file is picked up
 from `~/.config/nightscout-token` even if you never set `tokenFile`, so a
-leftover file there is enough to trigger the refusal — delete it if the token
+leftover file there is enough to trigger the refusal - delete it if the token
 is not actually in use.
 
 ### Why the token is in the URL
@@ -119,19 +116,8 @@ gets to make: `?token=` is the only credential its endpoints accept.
 
 Nightscout's `Authorization: Bearer` support is real, but it is api/v3-only
 and expects a JWT from `/api/v2/authorization/request/<token>`, not the access
-token itself. On the v1 and v2 endpoints this widget reads, the header is
-ignored — verified against 15.0.7, where a valid `?token=` populates the
-response's `authorized` object while a valid Bearer JWT leaves it `null`.
-
-Switching to api/v3 would not fix it either. `/api/v3/status` does not carry
-`settings.thresholds`, and `/api/v3/properties` does not exist, so the
-thresholds still have to come from v1 with `?token=` — and the display-scaled
-reading, delta, and trend arrow would have to be recomputed here from raw
-`sgv`, which is exactly the unit handling this widget avoids by letting the
-server decide.
-
-So the credential is protected by *where it is allowed to travel* rather than
-by where it sits in the request, which is what the HTTPS rule above enforces.
+token itself. On the endpoints we currently read, the header is
+ignored
 
 ## Sensor expiry
 
