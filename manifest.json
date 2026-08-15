@@ -45,7 +45,14 @@
         "type": "path",
         "label": "Access token file",
         "defaultValue": "",
-        "description": "File holding a read-only Nightscout token. Optional: a site with AUTH_DEFAULT_ROLES=readable needs none. Keep it outside any directory your dotfile manager syncs. Defaults to ~/.config/nightscout-token."
+        "description": "File holding a read-only Nightscout token. Optional: a site with AUTH_DEFAULT_ROLES=readable needs none. Keep it outside any directory your dotfile manager syncs. Defaults to ~/.config/nightscout-token. Sent only over https or to a loopback address unless allowInsecureAuth is set."
+      },
+      {
+        "key": "allowInsecureAuth",
+        "type": "boolean",
+        "label": "Send the token over plain HTTP",
+        "defaultValue": false,
+        "description": "By default a token is never sent to an http:// site unless it is on loopback, because the token and your glucose data would cross the network in clear text. Enable only for a site on a network you trust. Sites needing no token are unaffected."
       },
       {
         "key": "sensorDays",

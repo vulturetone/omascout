@@ -28,6 +28,35 @@ when present means locking the site down to `denied` needs no change here.
 Keep that file outside any directory a dotfile manager syncs -- a
 credential does not belong in a pushed repo.
 
+That token is only ever sent over a transport that can carry it safely:
+https, or a loopback address, where there is no wire to listen on. Plain
+http to anywhere else refuses to run rather than broadcasting the token --
+and the glucose data behind it -- to whoever shares the network. Pass
+--allow-insecure-auth to override that on a network you trust. The rule
+is about the credential, not the site: a `readable` site with no token
+polls over plain http exactly as before.
+
+The token travels in the query string, which is not this widget's choice:
+`?token=` is the only credential Nightscout's v1 and v2 endpoints accept.
+Their `Authorization: Bearer` support is real but api/v3-only, and it
+wants a JWT from /api/v2/authorization/request/<token> rather than the
+access token itself -- a raw token in a Bearer header is a 401 on every
+version. Verified against 15.0.7: with a valid token, `?token=` fills in
+`authorized` while a Bearer JWT leaves it null on v1 and v2.
+
+Moving to api/v3 to get the header would not help, because api/v3 has no
+equivalent of the two things this widget reads. The thresholds live in v1
+/api/v1/status.json under settings.thresholds and are simply absent from
+/api/v3/status, and /api/v2/properties has no v3 counterpart at all
+(/api/v3/properties is a 404), so the display-scaled value, the delta
+string, and the direction arrow would all have to be recomputed here from
+raw sgv -- reintroducing the unit handling this module exists to avoid.
+A v3 port would still need a `?token=` call to v1 for thresholds, so the
+credential would end up in a URL regardless.
+
+So the query string is where it has to go, and the thing keeping it safe
+is the transport rule above, not its placement in the request.
+
 Sensor expiry is NOT published by every uploader. Juggluco, for one,
 forwards only the sensor serial (in each entry's `device` field) and posts
 no Sensor Start/Change treatments. So expiry is derived: the oldest reading
@@ -52,18 +81,27 @@ Output is a single JSON object on stdout, always exit 0:
 
     {"state": "unconfigured", "text": "⚠️ NS", "classes": ["error"],
      "title": "No Nightscout URL", "detail": "..."}
+
+    {"state": "unconfigured", "text": "⚠️ Insecure", "classes": ["error"],
+     "title": "Insecure Nightscout URL", "detail": "..."}
 """
 
 import argparse
+import ipaddress
 import json
 import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
 DEFAULT_TOKEN_FILE = "~/.config/nightscout-token"
+
+# Stands in for a port urlparse refuses to read, so it compares unequal to a
+# real one and reaches the URL check in main() as a value rather than a raise.
+INVALID_PORT = "invalid"
 
 # Only used if the server has never been reachable. Nightscout's own defaults.
 FALLBACK = {"bgLow": 55, "bgTargetBottom": 70, "bgTargetTop": 180, "bgHigh": 260}
@@ -81,9 +119,24 @@ def emit(payload):
     sys.exit(0)
 
 
+def scrub(text):
+    """Strip the token out of anything user-visible.
+
+    `detail` is rendered in the popup and is the kind of string that ends up
+    pasted into a bug report. Most urllib errors don't quote the URL, but
+    `ValueError: unknown url type: '<url>'` does, which is enough to leak a
+    token that was riding in the query string.
+    """
+    tok = token()
+    if not tok:
+        return text
+    return text.replace(urllib.parse.quote(tok, safe=""), "***").replace(tok, "***")
+
+
 def fail(title, detail, text="⚠️ Error", state="error"):
     emit({"state": state, "text": text, "classes": ["error"],
-          "url": opts.url if opts else "", "title": title, "detail": detail})
+          "url": opts.url if opts else "", "title": title,
+          "detail": scrub(detail), "insecureAuth": insecure_auth_active()})
 
 
 def cache_path(kind):
@@ -110,21 +163,118 @@ def write_cache(path, value):
         pass
 
 
+_TOKEN_UNREAD = object()
+_token_cache = _TOKEN_UNREAD
+
+
 def token():
     """The read-only access token, or None if there isn't one."""
-    try:
-        return open(os.path.expanduser(opts.token_file)).read().strip() or None
-    except OSError:
+    global _token_cache
+    if opts is None:  # scrub() runs on any failure path, including an early one
         return None
+    if _token_cache is _TOKEN_UNREAD:
+        try:
+            _token_cache = open(
+                os.path.expanduser(opts.token_file)).read().strip() or None
+        except OSError:
+            _token_cache = None
+    return _token_cache
+
+
+def origin(url):
+    """(scheme, host, port), the unit a credential must not cross.
+
+    The port is read defensively because urlparse defers validating it until
+    the attribute is touched, and this runs on the redirect path too: a junk
+    port has to come back as a configuration error, not a traceback that
+    breaks the one-JSON-object-always contract.
+    """
+    p = urllib.parse.urlparse(url)
+    try:
+        port = p.port
+    except ValueError:
+        port = INVALID_PORT
+    return (p.scheme, (p.hostname or "").lower(), port)
+
+
+def is_loopback(host):
+    """True for an address whose traffic never reaches a network interface."""
+    if not host:
+        return False
+    host = host.lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_loopback
+    except ValueError:  # a name; we are not about to resolve it to decide this
+        return False
+
+
+def transport_protects_token():
+    """Whether this URL can carry a credential without publishing it.
+
+    Deliberately not a check for a private IP range: an eavesdropper on the
+    LAN is exactly the threat here, so 192.168.x.x earns no trust. Loopback is
+    the only unencrypted case that is safe on its own merits.
+    """
+    scheme, host, _ = origin(opts.url)
+    return scheme == "https" or is_loopback(host) or opts.allow_insecure_auth
+
+
+def insecure_auth_active():
+    """True when a token is riding a transport only the override permits.
+
+    Reported to the widget rather than recomputed there, so the panel warns on
+    what actually happened instead of on the setting: with no token, or over
+    https, the flag is inert and there is nothing to warn about.
+    """
+    if opts is None or not token() or not opts.allow_insecure_auth:
+        return False
+    scheme, host, _ = origin(opts.url)
+    return not (scheme == "https" or is_loopback(host))
+
+
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Keeps a redirect from walking the token off to another origin.
+
+    urllib replays our Authorization header on every hop it follows, and an
+    absolute Location carries the query string with it, so a site that has
+    been taken over -- or just misconfigured -- could hand the token to a
+    host the user never named. Only an http -> https upgrade of the same host
+    is followed; any other origin change stops here with a message naming
+    where it wanted to go.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old, new = origin(req.full_url), origin(urllib.parse.urljoin(req.full_url, newurl))
+        upgrade = (old[0] == "http" and new[0] == "https" and old[1] == new[1])
+        if old != new and not upgrade:
+            raise urllib.error.HTTPError(
+                req.full_url, code,
+                f"refusing redirect to a different site ({new[0]}://{new[1]}); "
+                f"set `url` to the address you actually want",
+                headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+OPENER = urllib.request.build_opener(SafeRedirectHandler)
 
 
 def get_json(path):
+    """Fetch `path`, carrying the token if the transport is allowed to.
+
+    The token goes in the query string because that is the only thing the
+    endpoints this widget needs will accept -- see the module docstring. The
+    protection against exposing it is transport_protects_token(), not the
+    placement.
+    """
     url = f"{opts.url}{path}"
-    tok = token()
+    tok = token() if transport_protects_token() else None
     if tok:
         # Some paths already carry a query string, so the separator depends.
-        url += ("&" if "?" in path else "?") + f"token={tok}"
-    with urllib.request.urlopen(url, timeout=opts.timeout) as r:
+        url += ("&" if "?" in path else "?") + \
+            f"token={urllib.parse.quote(tok, safe='')}"
+    with OPENER.open(urllib.request.Request(url), timeout=opts.timeout) as r:
         return json.load(r)
 
 
@@ -197,6 +347,9 @@ def parse_args():
                     help="Nightscout base URL (env: NIGHTSCOUT_URL)")
     ap.add_argument("--token-file", default=DEFAULT_TOKEN_FILE,
                     help=f"file holding a read-only access token (default: {DEFAULT_TOKEN_FILE})")
+    ap.add_argument("--allow-insecure-auth", action="store_true",
+                    help="send the token over plain http to a non-loopback host "
+                         "(exposes it, and your readings, to the network)")
     ap.add_argument("--timeout", type=float, default=4,
                     help="HTTP timeout in seconds (default: 4)")
     ap.add_argument("--stale-mins", type=int, default=5,
@@ -219,7 +372,36 @@ def main():
     if not opts.url:
         fail("No Nightscout URL",
              "Set `url` on this widget's entry in ~/.config/omarchy/shell.json.",
-             "⚠️ URL Missing", 
+             "⚠️ URL Missing",
+             "unconfigured")
+
+    scheme, host, port = origin(opts.url)
+    if scheme not in ("http", "https"):
+        fail("Bad Nightscout URL",
+             f"`url` must start with https:// or http:// "
+             f"(got {scheme + '://' if scheme else 'no scheme'}).",
+             "⚠️ URL Invalid",
+             "unconfigured")
+
+    if not host or port is INVALID_PORT:
+        fail("Bad Nightscout URL",
+             "`url` is not a usable address. Expected something like "
+             "https://mysite.example.com:1337.",
+             "⚠️ URL Invalid",
+             "unconfigured")
+
+    # Checked before the first request, not at send time, so the failure names
+    # the setting to change rather than surfacing as a 401 further down.
+    if token() and not transport_protects_token():
+        fail("Insecure Nightscout URL",
+             f"The read-only token would go to {host} in clear text over plain "
+             f"http, exposing it and your glucose data to anyone on the "
+             f"network. Use an https:// URL, or -- only on a network you "
+             f"trust -- set \"allowInsecureAuth\": true on this widget's entry "
+             f"in ~/.config/omarchy/shell.json. A site running "
+             f"AUTH_DEFAULT_ROLES=readable needs no token: removing "
+             f"{opts.token_file} polls it anonymously.",
+             "⚠️ Insecure",
              "unconfigured")
 
     try:
@@ -296,6 +478,7 @@ def main():
         # Echoed so the widget's "open Nightscout" action lands on the same
         # site this reading came from, without the URL being configured twice.
         "url": opts.url,
+        "insecureAuth": insecure_auth_active(),
         "glucose": {
             "shown": shown,
             "mgdl": mgdl,
