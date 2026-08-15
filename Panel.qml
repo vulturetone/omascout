@@ -114,7 +114,7 @@ Panel {
 
   // Assembled the way main() assembles the real thing, including the way the
   // sensor suffix is appended to the pill text rather than replacing it.
-  function demoReading(cls, mgdl, arrow, deltaMgdl, ageMins, sensor) {
+  function demoReading(cls, mgdl, arrow, deltaMgdl, ageMins, sensor, insecure) {
     var text = (demoValue(mgdl) + " " + arrow).trim()
     var classes = [cls]
     if (sensor && sensor.known) {
@@ -134,7 +134,8 @@ Panel {
         "ageMins": ageMins,
         "ageLabel": ageMins < 1 ? "just now" : ageMins + " min ago"
       },
-      "sensor": sensor || { "tracked": false, "serial": "", "known": false, "days": 0 }
+      "sensor": sensor || { "tracked": false, "serial": "", "known": false, "days": 0 },
+      "insecureAuth": insecure === true
     }
   }
 
@@ -160,6 +161,12 @@ Panel {
         "state": "unconfigured", "text": "⚠️ URL Missing", "classes": ["error"],
         "title": "No Nightscout URL",
         "detail": "Set `url` on this widget's entry in ~/.config/omarchy/shell.json." } },
+    { "label": "Insecure auth allowed", "payload":
+        demoReading("in-range", 140, "→", 5, 0, null, true) },
+    { "label": "Insecure URL", "payload": {
+        "state": "unconfigured", "text": "⚠️ Insecure", "classes": ["error"],
+        "title": "Insecure Nightscout URL",
+        "detail": "The read-only token would go to mysite.example.com in clear text over plain http, exposing it and your glucose data to anyone on the network. Use an https:// URL, or -- only on a network you trust -- set \"allowInsecureAuth\": true on this widget's entry in ~/.config/omarchy/shell.json." } },
     { "label": "Site unreachable", "payload": {
         "state": "error", "text": "⚠️ Nightscout unreachable", "classes": ["error"],
         "title": "Nightscout unreachable",
@@ -183,6 +190,11 @@ Panel {
   readonly property bool urgent: glucoseClass === "urgent-low" || glucoseClass === "urgent-high"
   readonly property bool sensorTracked: !!sensor && sensor.tracked === true
   readonly property bool sensorKnown: sensorTracked && sensor.known === true
+
+  // Reported by the script, not inferred from the setting here: allowInsecureAuth
+  // is inert without a token or over https, and warning about an inert flag
+  // would teach the user to ignore the warning that matters.
+  readonly property bool insecureAuth: !!shownPayload && shownPayload.insecureAuth === true
 
   // ---- Palette. Glucose classification is a traffic light, so these are
   //      fixed semantic colors rather than theme roles: a reading has to mean
@@ -253,6 +265,15 @@ Panel {
 
     var tokenFile = String(setting("tokenFile", "")).trim()
     if (tokenFile !== "") command = command.concat(["--token-file", tokenFile])
+
+    // Opt-in only, and passed through rather than interpreted here: the script
+    // owns the rule about which transports may carry the token, so running it
+    // by hand behaves the same as the widget does. Matched strictly against
+    // true, the way the other settings are coerced rather than trusted -- a
+    // typo here must fall back to not sending the token, never to sending it.
+    var insecure = setting("allowInsecureAuth", false)
+    if (insecure === true || String(insecure).toLowerCase() === "true")
+      command = command.concat(["--allow-insecure-auth"])
 
     return command
       .concat(numericArg("--sensor-days", "sensorDays", 0))
@@ -464,6 +485,17 @@ Panel {
           font.italic: true
           wrapMode: Text.WordWrap
         }
+        Text {
+          visible: root.insecureAuth
+          horizontalAlignment: Text.AlignRight
+          text: "⚠ Your token is being sent over plain HTTP"
+          elide: Text.ElideMiddle
+          color: root.colorHigh
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.bodySmall
+          font.italic: true
+          wrapMode: Text.Wrap
+        }
 
         // ---- Error. Replaces the hero rather than sitting under it: there
         //      is no reading to show.
@@ -648,6 +680,8 @@ Panel {
           font.italic: true
           wrapMode: Text.WordWrap
         }
+
+       
       }
     }
   }
